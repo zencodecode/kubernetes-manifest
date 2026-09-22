@@ -1,0 +1,8 @@
+.env
+*.agekey
+keys.txt
+kubeconfig
+*.pem
+*.key
+*.dec.yaml           # plaintext hasil decrypt sementara
+argocd-initial-admin-secret
