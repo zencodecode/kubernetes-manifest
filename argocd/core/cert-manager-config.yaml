@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-config
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }   # setelah CRD cert-manager
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Mafzaidi/kubernetes-manifest.git
+    targetRevision: main
+    path: core/cert-manager
+  destination: { server: https://kubernetes.default.svc, namespace: cert-manager }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
