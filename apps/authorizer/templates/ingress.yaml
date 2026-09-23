@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "authorizer.fullname" . }}
+  name: {{ include "authorizer-service.fullname" . }}
   labels:
-    {{- include "authorizer.labels" . | nindent 4 }}
+    {{- include "authorizer-service.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -35,7 +35,7 @@ spec:
             pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ include "authorizer.fullname" $ }}
+                name: {{ include "authorizer-service.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

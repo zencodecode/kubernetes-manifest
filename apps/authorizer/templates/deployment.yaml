@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "authorizer.fullname" . }}
+  name: {{ include "authorizer-service.fullname" . }}
   labels:
-    {{- include "authorizer.labels" . | nindent 4 }}
+    {{- include "authorizer-service.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "authorizer.selectorLabels" . | nindent 6 }}
+      {{- include "authorizer-service.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "authorizer.selectorLabels" . | nindent 8 }}
+        {{- include "authorizer-service.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -24,7 +24,7 @@ spec:
       {{- end }}
     spec:
       terminationGracePeriodSeconds: 30
-      serviceAccountName: {{ include "authorizer.serviceAccountName" . }}
+      serviceAccountName: {{ include "authorizer-service.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -34,13 +34,15 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: authorizer
+        - name: authorizer-service
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - name: http
-              containerPort: {{ .Values.containerPort }}
+            - name: public
+              containerPort: {{ .Values.publicApi.containerPort }}
+            - name: private
+              containerPort: {{ .Values.privateApi.containerPort }}
               protocol: TCP
 
           {{- with .Values.securityContext }}

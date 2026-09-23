@@ -6,7 +6,7 @@
 replicaCount: 1
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: docker.io/mafzaidi93/authorizer
+  repository: docker.io/mafzaidi93/authorizer-service
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
@@ -44,49 +44,75 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 1000
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
-service:
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  port: 80
-# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
-ingress:
-  enabled: true
-  className: "nginx"
-  annotations: {}
-  hosts:
-    - host: zencode.localdev.me
-      paths:
-        - path: /
-          pathType: Prefix
+# service:
+#   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+#   type: ClusterIP
+#   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+#   port: 80
+# # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
+# ingress:
+#   enabled: true
+#   className: "nginx"
+#   annotations: {}
+#   hosts:
+#     - host: authorizer.dev.local
+#       paths:
+#         - path: /
+#           pathType: Prefix
+#   tls: []
+
+publicApi:
+  port: 8080
+  containerPort: 8080
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: dev-public-service.authorizer.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+privateApi:
+  port: 9090
+  containerPort: 9090
+  service:
+    type: ClusterIP
+  networkPolicy:
+    enabled: true
   tls: []
+
 resources:
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
   limits:
-    cpu: 300m
-    memory: 256Mi
-  requests:
     cpu: 100m
     memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 startupProbe:
   httpGet:
-    path: /authorizer/v1/health
+    path: /health
     port: http
   failureThreshold: 30
   periodSeconds: 2
 livenessProbe:
   httpGet:
-    path: /authorizer/v1/health
+    path: /health
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
 readinessProbe:
   httpGet:
-    path: /authorizer/v1/health
+    path: /ready
     port: http
   initialDelaySeconds: 5
   periodSeconds: 5
@@ -98,25 +124,25 @@ autoscaling:
   maxReplicas: 3
   targetCPUUtilizationPercentage: 60
   # targetMemoryUtilizationPercentage: 80
-# Additional volumes on the output Deployment definition.
-volumes:
-  - name: config
-    configMap:
-      name: authorizer-config
-  - name: jwt-key
-    secret:
-      secretName: authorizer-jwt-key
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts:
-  - name: config
-    mountPath: /app/config
-    readOnly: true
-  - name: jwt-key
-    mountPath: /keys
-    readOnly: true
-nodeSelector: {}
-tolerations: []
-affinity: {}
+# # Additional volumes on the output Deployment definition.
+# volumes:
+#   - name: config
+#     configMap:
+#       name: authorizer-config
+#   - name: jwt-key
+#     secret:
+#       secretName: authorizer-jwt-key
+# # Additional volumeMounts on the output Deployment definition.
+# volumeMounts:
+#   - name: config
+#     mountPath: /app/config
+#     readOnly: true
+#   - name: jwt-key
+#     mountPath: /keys
+#     readOnly: true
+# nodeSelector: {}
+# tolerations: []
+# affinity: {}
 
 envFrom:
   - secretRef:
@@ -126,4 +152,9 @@ env:
   - name: JWT_PRIVATE_KEY_PATH
     value: /keys/private.pem
 
-containerPort: 4000
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels: { app.kubernetes.io/name: authorizer-service }
