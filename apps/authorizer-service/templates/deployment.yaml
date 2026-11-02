@@ -39,7 +39,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - name: public
+            - name: http
               containerPort: {{ .Values.publicApi.containerPort }}
             - name: private
               containerPort: {{ .Values.privateApi.containerPort }}

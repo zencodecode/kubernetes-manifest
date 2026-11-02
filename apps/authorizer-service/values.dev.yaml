@@ -148,6 +148,12 @@ envFrom:
   - secretRef:
       name: authorizer-service-secret
 
+env:
+  - name: INTERFACE
+    value: "HTTP_PUBLIC"
+  - name: HTTP_PUBLIC_PORT
+    value: "8080"
+
 topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: kubernetes.io/hostname
