@@ -144,7 +144,7 @@ secret-edit:
 .PHONY: secret-check
 secret-check:
 	@echo "==> Menjalankan audit keamanan staging git..."
-	@STAGED_LEAKS=$$(git diff --cached --name-only | grep -E '(\.env(\..+)?$$|\.dec\.ya?ml$$|\.plain\.ya?ml$$|secret-.*\.ya?ml$$)' | grep -v '\.env\.example$$' || true); \
+	@STAGED_LEAKS=$$(git diff --cached --name-only | grep -E '(\.env(\..+)?$$|\.dec\.ya?ml$$|\.plain\.ya?ml$$|secret-.*\.ya?ml$$)' | grep -v '\.env\.example$$' | grep -v 'secret-generator' || true); \
 	if [ -n "$$STAGED_LEAKS" ]; then \
 		echo "=================================================================" >&2; \
 		echo "CRITICAL SECURITY ALERT: Ditemukan file plain secret di git staging!" >&2; \
@@ -153,7 +153,7 @@ secret-check:
 		echo "=================================================================" >&2; \
 		exit 1; \
 	fi; \
-	UNENCRYPTED_SECRETS=$$(git diff --cached --name-only | grep -E '^secrets/.*\.ya?ml$$' | grep -v 'secret\.enc\.ya?ml$$' | grep -v 'kustomization\.ya?ml$$' | grep -v 'secret-generator\.ya?ml$$' || true); \
+	UNENCRYPTED_SECRETS=$$(git diff --cached --name-only | grep -E '^secrets/.*\.ya?ml$$' | grep -v 'secret\.enc\.' | grep -v 'kustomization\.' | grep -v 'secret-generator\.' || true); \
 	if [ -n "$$UNENCRYPTED_SECRETS" ]; then \
 		echo "=================================================================" >&2; \
 		echo "CRITICAL SECURITY ALERT: Ditemukan YAML tak terenkripsi di folder secrets/!" >&2; \

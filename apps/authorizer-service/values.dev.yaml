@@ -146,7 +146,7 @@ autoscaling:
 
 envFrom:
   - secretRef:
-      name: authorizer-secret-dev
+      name: authorizer-service-secret
 
 topologySpreadConstraints:
   - maxSkew: 1

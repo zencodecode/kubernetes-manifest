@@ -8,6 +8,7 @@
 *.unenc.yaml
 *secret-*.yaml
 secrets/**/secret-*.yaml
+!**/secret-generator.yaml
 secrets/**/.env*
 !secrets/**/.env.example
 !.env.example
