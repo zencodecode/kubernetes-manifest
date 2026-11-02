@@ -10,7 +10,7 @@ image:
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.0.0-dev.2ce4277
+  tag: 0.0.0-dev.920943c
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
 # This is to override the chart name.
@@ -92,8 +92,8 @@ resources:
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
   limits:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 50m
+    memory: 64Mi
   requests:
     cpu: 50m
     memory: 64Mi
@@ -146,11 +146,7 @@ autoscaling:
 
 envFrom:
   - secretRef:
-      name: authorizer-secret
-
-env:
-  - name: JWT_PRIVATE_KEY_PATH
-    value: /keys/private.pem
+      name: authorizer-secret-dev
 
 topologySpreadConstraints:
   - maxSkew: 1

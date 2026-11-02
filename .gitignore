@@ -1,8 +1,27 @@
-.env
+# Environment and Plaintext Secret Files (CRITICAL: NEVER COMMIT)
+*.env
+*.env.*
+*.env.local
+*.dec.yaml
+*.dec.yml
+*.plain.yaml
+*.unenc.yaml
+*secret-*.yaml
+secrets/**/secret-*.yaml
+secrets/**/.env*
+!secrets/**/.env.example
+!.env.example
+
+# Age / SOPS encryption keys
 *.agekey
 keys.txt
+
+# Kubernetes & Cluster secrets
 kubeconfig
 *.pem
 *.key
-*.dec.yaml           # plaintext hasil decrypt sementara
 argocd-initial-admin-secret
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
