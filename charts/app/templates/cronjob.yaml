@@ -1,0 +1,41 @@
+{{- range $name, $c := .Values.cronJobs }}
+{{- if include "app.isEnabled" $c }}
+{{- $ctx := dict "root" $ "component" $name }}
+{{- $podAnnotations := include "app.podAnnotations" (dict "root" $ "extra" $c.podAnnotations) | trim }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ required (printf "cronJobs.%s.schedule is required" $name) $c.schedule | quote }}
+  {{- with $c.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: {{ $c.concurrencyPolicy | default "Forbid" }}
+  successfulJobsHistoryLimit: {{ hasKey $c "successfulJobsHistoryLimit" | ternary $c.successfulJobsHistoryLimit 3 }}
+  failedJobsHistoryLimit: {{ hasKey $c "failedJobsHistoryLimit" | ternary $c.failedJobsHistoryLimit 1 }}
+  {{- with $c.startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ . }}
+  {{- end }}
+  suspend: {{ $c.suspend | default false }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ hasKey $c "backoffLimit" | ternary $c.backoffLimit 1 }}
+      {{- with $c.activeDeadlineSeconds }}
+      activeDeadlineSeconds: {{ . }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+            {{- include "app.podLabels" (dict "root" $ "component" $name "extra" $c.podLabels) | nindent 12 }}
+          {{- with $podAnnotations }}
+          annotations:
+            {{- . | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- include "app.podSpec" (dict "root" $ "name" $name "spec" $c "restartPolicy" "Never") | nindent 10 }}
+{{- end }}
+{{- end }}

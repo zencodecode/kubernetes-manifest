@@ -1,0 +1,16 @@
+# Argo CD ApplicationSet parameters for authorizer-service in dev.
+# The app name and env come from the folder path: apps/<app>/envs/<env>/.
+# Generated Application: authorizer-service-dev (see argocd/appsets/apps.yaml).
+
+# Chart that renders this app. Use another path for apps that need their own chart.
+chart:
+  path: charts/app
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: authorizer-service-dev
+
+sync:
+  # dev: auto-sync with prune + self-heal. For production set false and
+  # promote with a manual sync after review.
+  automated: true

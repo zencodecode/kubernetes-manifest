@@ -1,0 +1,15 @@
+{{- if .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "app.configMapName" . }}
+  labels:
+    {{- include "app.labels" (dict "root" .) | nindent 4 }}
+  annotations:
+    # Must exist before the job hooks (wave -2/-1) run.
+    argocd.argoproj.io/sync-wave: "-3"
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}
+{{- end }}

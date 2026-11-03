@@ -64,7 +64,7 @@ secret-init:
 	@mkdir -p $(SECRETS_DIR)
 	@# Generate kustomization.yaml jika belum ada
 	@if [ ! -f "$(SECRETS_DIR)/kustomization.yaml" ]; then \
-		printf "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\ngenerators:\n  - secret-generator.yaml\n" > $(SECRETS_DIR)/kustomization.yaml; \
+		printf "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n# Wave -3: Secret exists before the job hooks (-2/-1) and workloads (0).\ncommonAnnotations:\n  argocd.argoproj.io/sync-wave: \"-3\"\ngenerators:\n  - secret-generator.yaml\n" > $(SECRETS_DIR)/kustomization.yaml; \
 		echo "    [+] Dibuat: $(SECRETS_DIR)/kustomization.yaml"; \
 	fi
 	@# Generate secret-generator.yaml jika belum ada

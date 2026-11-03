@@ -1,0 +1,42 @@
+{{- range $name, $w := .Values.workloads }}
+{{- $route := $w.route | default dict }}
+{{- if and (include "app.isEnabled" $w) $w.ports $route.enabled }}
+{{- $ctx := dict "root" $ "component" $name }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+  {{- with $route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml (required (printf "workloads.%s.route.parentRefs is required" $name) $route.parentRefs) | nindent 4 }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range ($route.rules | default (list dict)) }}
+    - backendRefs:
+        - name: {{ include "app.componentName" $ctx }}
+          port: {{ include "app.servicePort" (dict "ports" $w.ports "port" .port) }}
+      {{- with .matches }}
+      matches:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

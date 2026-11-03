@@ -1,0 +1,38 @@
+{{- range $name, $j := .Values.jobs }}
+{{- if include "app.isEnabled" $j }}
+{{- $ctx := dict "root" $ "component" $name }}
+{{- $hook := hasKey $j "hook" | ternary $j.hook "Sync" }}
+{{- $podAnnotations := include "app.podAnnotations" (dict "root" $ "extra" $j.podAnnotations) | trim }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+  annotations:
+    {{- if $hook }}
+    argocd.argoproj.io/hook: {{ $hook }}
+    argocd.argoproj.io/hook-delete-policy: {{ $j.deletePolicy | default "BeforeHookCreation" }}
+    {{- end }}
+    argocd.argoproj.io/sync-wave: {{ $j.wave | default 0 | quote }}
+spec:
+  backoffLimit: {{ hasKey $j "backoffLimit" | ternary $j.backoffLimit 3 }}
+  {{- with $j.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ . }}
+  {{- end }}
+  {{- with $j.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.podLabels" (dict "root" $ "component" $name "extra" $j.podLabels) | nindent 8 }}
+      {{- with $podAnnotations }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "app.podSpec" (dict "root" $ "name" $name "spec" $j "restartPolicy" "Never") | nindent 6 }}
+{{- end }}
+{{- end }}

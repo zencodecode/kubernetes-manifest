@@ -1,0 +1,87 @@
+# One Argo CD Application per app environment, discovered from
+#   apps/<app>/envs/<env>/config.yaml
+# Generated Application: <app>-<env>, project "apps". Its sources:
+#   1. the chart (default charts/app) rendered with
+#        apps/<app>/values.yaml + apps/<app>/envs/<env>/values.yaml
+#   2. this repo as the `$values` ref used by the value files above
+#   3. secrets/<app>/<env> (Kustomize + KSOPS), skipped when secrets.enabled: false
+# Chart, values and Secret sync together in one Application, ordered by sync waves.
+#
+# config.yaml keys (do not add a top-level `path` key, the generator reserves it):
+#   chart.path            required, e.g. charts/app
+#   chart.repoURL         optional, default this repo
+#   chart.targetRevision  optional, default main (pin a git tag in prod to
+#                         promote chart changes env by env)
+#   destination.server    required
+#   destination.namespace required, <app>-<env>
+#   secrets.enabled       optional, default true
+#   sync.automated        optional, default false (manual sync)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+        revision: main
+        files:
+          - path: apps/*/envs/*/config.yaml
+  template:
+    metadata:
+      name: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      labels:
+        app.kubernetes.io/part-of: '{{ index .path.segments 1 }}'
+        environment: '{{ .path.basename }}'
+      # Removing an env folder from Git deletes that env's resources too.
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: apps
+      destination:
+        server: '{{ .destination.server }}'
+        namespace: '{{ .destination.namespace }}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - PrunePropagationPolicy=foreground
+        # Enforce the "restricted" Pod Security Standard on app namespaces.
+        managedNamespaceMetadata:
+          labels:
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/warn: restricted
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+  templatePatch: |
+    spec:
+      sources:
+        - repoURL: {{ dig "chart" "repoURL" "https://github.com/zencodecode/kubernetes-manifest.git" . }}
+          targetRevision: {{ dig "chart" "targetRevision" "main" . }}
+          path: {{ .chart.path }}
+          helm:
+            releaseName: {{ index .path.segments 1 }}
+            valueFiles:
+              - $values/apps/{{ index .path.segments 1 }}/values.yaml
+              - $values/{{ .path.path }}/values.yaml
+        - repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+          targetRevision: main
+          ref: values
+        {{- if dig "secrets" "enabled" true . }}
+        - repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+          targetRevision: main
+          path: secrets/{{ index .path.segments 1 }}/{{ .path.basename }}
+        {{- end }}
+      {{- if dig "sync" "automated" false . }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+      {{- end }}

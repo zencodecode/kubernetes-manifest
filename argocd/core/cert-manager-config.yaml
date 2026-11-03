@@ -5,7 +5,7 @@ metadata:
   namespace: argocd
   annotations: { argocd.argoproj.io/sync-wave: "1" }   # setelah CRD cert-manager
 spec:
-  project: default
+  project: platform
   source:
     repoURL: https://github.com/zencodecode/kubernetes-manifest.git
     targetRevision: main

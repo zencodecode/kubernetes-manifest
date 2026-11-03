@@ -1,0 +1,193 @@
+# Generic chart for in-house services.
+#
+# A release (= one app in one environment) can render any combination of:
+#   workloads: long-running Deployments (HTTP/gRPC servers, queue consumers, ...)
+#   jobs:      one-shot Jobs run as Argo CD sync hooks (migrations, seeding, ...)
+#   cronJobs:  scheduled Jobs
+# All of them share the same image, ServiceAccount, config and secrets.
+#
+# Argo CD sync order inside one Application (lower wave first):
+#   -3  ConfigMap, ServiceAccount, Secret (the Secret wave is set in secrets/<app>/<env>)
+#   -2..-1  jobs (set `wave` per job; keep it above -3)
+#    0  workloads, Services, Ingress/HTTPRoute, HPA, PDB, NetworkPolicy
+
+# Resource name prefix and app.kubernetes.io/name. Defaults to the release name.
+nameOverride: ""
+
+image:
+  repository: ""        # required
+  tag: ""               # required unless digest is set
+  digest: ""            # optional, e.g. sha256:...; pins the exact image
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Extra labels on every resource and pod.
+commonLabels: {}
+# Extra labels/annotations on every pod.
+podLabels: {}
+podAnnotations: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  # Only mount the API token if the app talks to the Kubernetes API.
+  automount: false
+  # e.g. cloud workload identity: eks.amazonaws.com/role-arn, iam.gke.io/gcp-service-account
+  annotations: {}
+
+# Non-secret settings -> ConfigMap "<name>-config", loaded with envFrom into
+# every container. Changing it rolls the workloads (checksum annotation).
+config: {}
+
+# Existing Secrets (KSOPS, External Secrets, ...) loaded with envFrom into every
+# container. Precedence for duplicate keys: secretRefs < config < env.
+secretRefs: []
+
+# Extra env vars for every container (workload/job `env` is appended after it).
+env: []
+
+# In-house images run as UID/GID 10001. Meets the "restricted" Pod Security Standard.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Writable /tmp (emptyDir) because the root filesystem is read-only.
+tmpVolume:
+  enabled: true
+  sizeLimit: 64Mi
+
+# Extra volumes/mounts for every pod (workloads/jobs can add their own too).
+volumes: []
+volumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+# Defaults applied to each workload unless the workload sets the same key.
+defaults:
+  replicas: 1
+  revisionHistoryLimit: 3
+  terminationGracePeriodSeconds: 30
+  # Zero-downtime rollouts: never drop below the desired replica count.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+  # Spread replicas across zones (cloud) and nodes. ScheduleAnyway keeps pods
+  # schedulable on clusters without zone labels (e.g. k3d).
+  topologySpreadConstraints:
+    - topologyKey: topology.kubernetes.io/zone
+      maxSkew: 1
+      whenUnsatisfiable: ScheduleAnyway
+    - topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: ScheduleAnyway
+  # Rendered only when the workload runs more than one pod.
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  service:
+    type: ClusterIP
+
+networkPolicy:
+  # Ingress-only policy per workload. Egress is not restricted.
+  enabled: false
+  # Allow traffic from any pod in the same namespace to the workload ports.
+  allowSameNamespace: true
+  # Namespaces of the ingress controller / gateway, allowed to reach workloads
+  # that have ingress or route enabled.
+  ingressControllerNamespaces:
+    - ingress-nginx
+  # Extra NetworkPolicyIngressRule items added to every workload's policy.
+  extraIngress: []
+
+# ---------------------------------------------------------------------------
+# workloads: one Deployment per key. Example:
+#
+#   api:
+#     enabled: true                # default true
+#     replicas: 2                  # ignored when autoscaling.enabled
+#     command: ["/app/server"]
+#     args: []
+#     env: []
+#     envFrom: []
+#     ports:                       # no ports -> no Service/Ingress/Route
+#       - name: http
+#         containerPort: 8080
+#         servicePort: 80          # optional, defaults to containerPort
+#     probes: { startup: {}, liveness: {}, readiness: {} }   # raw probe specs
+#     lifecycle: {}
+#     resources: {}
+#     strategy: {}
+#     topologySpreadConstraints: []  # [] disables spreading for this workload
+#     service: { enabled: true, type: ClusterIP, annotations: {} }
+#     ingress:
+#       enabled: false
+#       className: nginx
+#       annotations: {}            # e.g. cert-manager.io/cluster-issuer: letsencrypt
+#       hosts:
+#         - host: api.example.com
+#           paths: [{ path: /, pathType: Prefix, port: http }]
+#       tls: [{ secretName: api-tls, hosts: [api.example.com] }]
+#     route:                       # Gateway API HTTPRoute (alternative to ingress)
+#       enabled: false
+#       parentRefs: [{ name: public, namespace: gateway-system }]
+#       hostnames: [api.example.com]
+#       rules: [{ matches: [{ path: { type: PathPrefix, value: / } }], port: http }]
+#     autoscaling:
+#       enabled: false
+#       minReplicas: 2
+#       maxReplicas: 5
+#       targetCPUUtilizationPercentage: 70
+#       targetMemoryUtilizationPercentage: null
+#       behavior: {}
+#     pdb: { enabled: true, maxUnavailable: 1 }   # or minAvailable
+#     networkPolicy: { extraIngress: [] }
+# ---------------------------------------------------------------------------
+workloads: {}
+
+# ---------------------------------------------------------------------------
+# jobs: one Job per key, run as an Argo CD hook. Example:
+#
+#   migrate:
+#     hook: Sync                   # PreSync | Sync | PostSync | "" (plain Job)
+#     wave: -2
+#     deletePolicy: BeforeHookCreation
+#     command: ["migrate"]
+#     args: []
+#     backoffLimit: 3
+#     activeDeadlineSeconds: 300
+# ---------------------------------------------------------------------------
+jobs: {}
+
+# ---------------------------------------------------------------------------
+# cronJobs: one CronJob per key. Example:
+#
+#   cleanup:
+#     schedule: "0 3 * * *"
+#     timeZone: Asia/Jakarta
+#     concurrencyPolicy: Forbid
+#     command: ["/app/cleanup"]
+# ---------------------------------------------------------------------------
+cronJobs: {}

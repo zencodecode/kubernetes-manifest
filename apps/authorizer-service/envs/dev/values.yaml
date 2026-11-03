@@ -1,0 +1,29 @@
+# authorizer-service / dev overrides (merged on top of ../../values.yaml).
+
+image:
+  # Must be built from the current Dockerfile (numeric UID 10001, bundled
+  # migrate CLI + /app/migrations). Bump this after pushing a new image.
+  tag: 0.0.0-dev.920943c
+
+config:
+  # Local cluster serves plain HTTP: no HTTPS redirect, any CORS origin.
+  ENVIRONMENT: development
+  CORS: "*"
+
+workloads:
+  public:
+    autoscaling:
+      minReplicas: 2
+      maxReplicas: 3
+    ingress:
+      enabled: true
+      className: nginx
+      hosts:
+        - host: dev-public-service.authorizer.local
+          paths:
+            - path: /
+              pathType: Prefix
+
+  event:
+    # One consumer is enough locally; RabbitMQ buffers messages during restarts.
+    replicas: 1

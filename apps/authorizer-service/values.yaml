@@ -1,125 +1,128 @@
-# Default values for authorizer-service.
-# Shared across all environments. Per-env overrides go in values.<env>.yaml.
-
-replicaCount: 1
+# authorizer-service: values shared by every environment.
+# Rendered with the generic chart in charts/app. Per-env overrides live in
+# envs/<env>/values.yaml and are merged on top of this file.
+#
+# One image, several roles. The api binary (/app/authorizer) picks its role
+# from the INTERFACE env var, one role per process:
+#   HTTP_PUBLIC  -> OAuth/OIDC HTTP server, exposes /health and /ready
+#   EVENT        -> RabbitMQ consumer (email), no HTTP port
+#   HTTP_PRIVATE -> admin API (handler still commented out in cmd/api/main.go)
+# The image also ships /app/seed and the golang-migrate CLI + /app/migrations.
 
 image:
   repository: docker.io/mafzaidi93/authorizer-service
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: 0.0.0-dev.757bf63   # pinned per environment
 
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+# Runtime secrets (Postgres, Redis, RabbitMQ, SMTP, JWT, OAuth, SEED_*). Created
+# from secrets/authorizer-service/<env>/ by KSOPS in the same Argo CD Application.
+secretRefs:
+  - authorizer-service-secret
 
-serviceAccount:
-  create: true
-  automount: true
-  annotations: {}
-  name: ""
+# Non-secret settings shared by every env. The app treats any ENVIRONMENT other
+# than "production" as non-prod; "production" (the app default) turns on HTTPS
+# redirects and requires CORS to be set.
+config: {}
 
-podAnnotations: {}
-podLabels: {}
-
-podSecurityContext:
-  fsGroup: 2000
-
-securityContext:
-  capabilities:
-    drop:
-      - ALL
-  readOnlyRootFilesystem: true
-  allowPrivilegeEscalation: false
-  runAsNonRoot: true
-  runAsUser: 1000
-
-# Main service (used by ingress)
-service:
-  type: ClusterIP
-  port: 8080
-
-# Public API
-publicApi:
-  port: 8080
-  containerPort: 8080
-  service:
-    type: ClusterIP
-  ingress:
-    enabled: false
-    className: "nginx"
-    annotations: {}
-    hosts: []
-    tls: []
-
-# Private API (internal gRPC / inter-service)
-privateApi:
-  port: 9090
-  containerPort: 9090
-  service:
-    type: ClusterIP
-  networkPolicy:
-    enabled: false
-  tls: []
-
-# Ingress (legacy/single-port — prefer publicApi.ingress)
-ingress:
-  enabled: false
-  className: "nginx"
-  annotations: {}
-  hosts: []
-  tls: []
-
-resources:
-  limits:
-    cpu: 100m
-    memory: 128Mi
-  requests:
-    cpu: 50m
-    memory: 64Mi
-
-startupProbe:
-  httpGet:
-    path: /health
-    port: http
-  failureThreshold: 30
-  periodSeconds: 2
-
-livenessProbe:
-  httpGet:
-    path: /health
-    port: http
-  initialDelaySeconds: 10
-  periodSeconds: 10
-
-readinessProbe:
-  httpGet:
-    path: /ready
-    port: http
-  initialDelaySeconds: 5
-  periodSeconds: 5
-
-autoscaling:
+networkPolicy:
   enabled: true
-  minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 60
-  # targetMemoryUtilizationPercentage: 80
 
-volumes: []
-volumeMounts: []
+workloads:
+  public:
+    command: ["/app/authorizer"]
+    env:
+      - name: INTERFACE
+        value: HTTP_PUBLIC
+      # Must match ports[http].containerPort.
+      - name: HTTP_PUBLIC_PORT
+        value: "8181"
+    ports:
+      - name: http
+        containerPort: 8181
+    probes:
+      # /health is always 200 once the server is up (liveness, no dependency checks).
+      startup:
+        httpGet: { path: /health, port: http }
+        periodSeconds: 2
+        failureThreshold: 30
+      liveness:
+        httpGet: { path: /health, port: http }
+        periodSeconds: 10
+        failureThreshold: 3
+      # /ready pings Postgres and Redis; pod leaves the load balancer when they fail.
+      readiness:
+        httpGet: { path: /ready, port: http }
+        periodSeconds: 5
+        failureThreshold: 3
+    # Give the ingress controller time to drop the pod from its endpoints before
+    # the app gets SIGTERM (the app then drains for up to 15s).
+    lifecycle:
+      preStop:
+        sleep:
+          seconds: 5
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { memory: 256Mi }
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    ingress:
+      enabled: false   # host is set per environment
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
+  event:
+    command: ["/app/authorizer"]
+    env:
+      - name: INTERFACE
+        value: EVENT
+    # Competing consumers on the same queue; 2 replicas keep email delivery
+    # running while one pod restarts or its node is drained.
+    replicas: 2
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { memory: 192Mi }
 
-envFrom: []
-env: []
+  # Admin API. Enable once HTTP_PRIVATE is implemented in the app; until then the
+  # process exits right away and the pod would crash-loop. Keep it internal: no
+  # ingress, and the NetworkPolicy only admits pods from the same namespace.
+  # Add probes here once the private server exposes a health endpoint.
+  private:
+    enabled: false
+    command: ["/app/authorizer"]
+    env:
+      - name: INTERFACE
+        value: HTTP_PRIVATE
+      - name: HTTP_PRIVATE_PORT
+        value: "8080"
+    ports:
+      - name: http
+        containerPort: 8080
 
-topologySpreadConstraints:
-  - maxSkew: 1
-    topologyKey: kubernetes.io/hostname
-    whenUnsatisfiable: ScheduleAnyway
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: authorizer-service
+# Argo CD Sync hooks. They run on every sync, after the Secret/ConfigMap
+# (wave -3) and before the workloads (wave 0). Both commands are idempotent.
+jobs:
+  migrate:
+    hook: Sync
+    wave: -2
+    command: ["migrate"]
+    # Kubernetes expands $(VAR) from the container env (the Secret above).
+    # The password is not put in the URL: the postgres driver (lib/pq) reads
+    # PGPASSWORD, so any character works and it stays out of the process args.
+    env:
+      - name: PGPASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: authorizer-service-secret
+            key: POSTGRES_PASSWORD
+    args:
+      - -path=/app/migrations
+      - -database=postgres://$(POSTGRES_USER)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DATABASE)?sslmode=$(POSTGRES_SSLMODE)
+      - up
+    backoffLimit: 3
+    activeDeadlineSeconds: 300
+  seed:
+    hook: Sync
+    wave: -1
+    command: ["/app/seed"]
+    backoffLimit: 3
+    activeDeadlineSeconds: 300

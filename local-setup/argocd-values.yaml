@@ -45,5 +45,8 @@ repoServer:
 configs:
   cm:
     kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"
+    # Track resources by annotation instead of the app.kubernetes.io/instance
+    # label, so Argo CD does not overwrite the label that Helm charts set.
+    application.resourceTrackingMethod: annotation
   params:
     server.insecure: true

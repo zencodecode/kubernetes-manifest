@@ -1,0 +1,31 @@
+{{- range $name, $w := .Values.workloads }}
+{{- $svc := $w.service | default dict }}
+{{- if and (include "app.isEnabled" $w) $w.ports (include "app.isEnabled" $svc) }}
+{{- $ctx := dict "root" $ "component" $name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+  {{- with $svc.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $svc.type | default $.Values.defaults.service.type }}
+  selector:
+    {{- include "app.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    {{- range $w.ports }}
+    - name: {{ .name }}
+      port: {{ .servicePort | default .containerPort }}
+      targetPort: {{ .name }}
+      protocol: {{ .protocol | default "TCP" }}
+      {{- with .appProtocol }}
+      appProtocol: {{ . }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

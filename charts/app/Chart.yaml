@@ -1,0 +1,9 @@
+apiVersion: v2
+name: app
+description: >-
+  Generic, reusable chart for in-house services. One release renders any mix of
+  long-running workloads (Deployments), one-shot Jobs (Argo CD sync hooks) and
+  CronJobs from a single image, with HA and security defaults built in.
+type: application
+version: 1.0.0
+kubeVersion: ">=1.30.0-0"

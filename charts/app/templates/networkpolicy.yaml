@@ -1,0 +1,28 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- range $name, $w := .Values.workloads }}
+{{- if include "app.isEnabled" $w }}
+{{- $ctx := dict "root" $ "component" $name }}
+{{- $rules := include "app.networkPolicyRules" (dict "root" $ "spec" $w) | trim }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app.selectorLabels" $ctx | nindent 6 }}
+  policyTypes:
+    - Ingress
+  {{- if $rules }}
+  ingress:
+    {{- $rules | nindent 4 }}
+  {{- else }}
+  # No ports and no extra rules: deny all inbound traffic (e.g. queue consumers).
+  ingress: []
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

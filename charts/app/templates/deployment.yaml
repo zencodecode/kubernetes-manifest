@@ -1,0 +1,35 @@
+{{- range $name, $w := .Values.workloads }}
+{{- if include "app.isEnabled" $w }}
+{{- $d := $.Values.defaults }}
+{{- $ctx := dict "root" $ "component" $name }}
+{{- $as := $w.autoscaling | default dict }}
+{{- $podAnnotations := include "app.podAnnotations" (dict "root" $ "extra" $w.podAnnotations) | trim }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $as.enabled }}
+  replicas: {{ hasKey $w "replicas" | ternary $w.replicas $d.replicas }}
+  {{- end }}
+  revisionHistoryLimit: {{ $d.revisionHistoryLimit }}
+  strategy:
+    {{- toYaml (hasKey $w "strategy" | ternary $w.strategy $d.strategy) | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.podLabels" (dict "root" $ "component" $name "extra" $w.podLabels) | nindent 8 }}
+      {{- with $podAnnotations }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "app.podSpec" (dict "root" $ "name" $name "spec" $w "topology" true) | nindent 6 }}
+{{- end }}
+{{- end }}

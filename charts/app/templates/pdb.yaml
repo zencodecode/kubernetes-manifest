@@ -1,0 +1,32 @@
+{{- range $name, $w := .Values.workloads }}
+{{- if include "app.isEnabled" $w }}
+{{- $d := $.Values.defaults }}
+{{- $pdb := $w.pdb | default dict }}
+{{- $enabled := hasKey $pdb "enabled" | ternary $pdb.enabled $d.pdb.enabled }}
+{{- $as := $w.autoscaling | default dict }}
+{{- $replicas := hasKey $w "replicas" | ternary $w.replicas $d.replicas }}
+{{- $minPods := ($as.enabled | default false) | ternary ($as.minReplicas | default 2) $replicas }}
+{{- /* A PDB only makes sense when there is more than one pod to protect. */}}
+{{- if and $enabled (gt (int $minPods) 1) }}
+{{- $ctx := dict "root" $ "component" $name }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "app.componentName" $ctx }}
+  labels:
+    {{- include "app.labels" $ctx | nindent 4 }}
+spec:
+  {{- if hasKey $pdb "minAvailable" }}
+  minAvailable: {{ $pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $pdb.maxUnavailable | default $d.pdb.maxUnavailable }}
+  {{- end }}
+  # Do not let crash-looping pods block node drains.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}
