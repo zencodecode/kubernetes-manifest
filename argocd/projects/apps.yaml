@@ -28,7 +28,10 @@ spec:
     - { group: '', kind: Secret }
     - { group: '', kind: Service }
     - { group: '', kind: ServiceAccount }
+    - { group: '', kind: Pod }
+    - { group: '', kind: Endpoints }
     - { group: apps, kind: Deployment }
+    - { group: apps, kind: ReplicaSet }
     - { group: batch, kind: Job }
     - { group: batch, kind: CronJob }
     - { group: autoscaling, kind: HorizontalPodAutoscaler }
@@ -36,6 +39,7 @@ spec:
     - { group: networking.k8s.io, kind: Ingress }
     - { group: networking.k8s.io, kind: NetworkPolicy }
     - { group: gateway.networking.k8s.io, kind: HTTPRoute }
+    - { group: discovery.k8s.io, kind: EndpointSlice }
   # Show resources in app namespaces that are not in Git.
   orphanedResources:
     warn: true
