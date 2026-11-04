@@ -10,6 +10,8 @@ spec:
     helm:
       values: |
         controller:
+          hostPort:
+            enabled: true
           service:
             type: NodePort
             nodePorts: { http: 30080, https: 30443 }
