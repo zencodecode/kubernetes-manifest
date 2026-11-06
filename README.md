@@ -1,63 +1,91 @@
 # kubernetes-manifest
 
-Repo GitOps (Argo CD) untuk semua aplikasi. Satu branch (`main`), environment dibedakan lewat folder.
+Repo GitOps (Argo CD) untuk semua aplikasi dan add-on cluster. Satu branch (`main`),
+environment dibedakan lewat folder, dan satu repo bisa menggambarkan banyak cluster
+(lokal k3d sekarang, cloud nanti) tanpa menyalin-tempel.
 
 ## Struktur
 
 ```
-bootstrap/root-app.yaml      App-of-Apps: Argo CD mengelola semua isi argocd/
+bootstrap/root-app.yaml        App-of-Apps: Argo CD mengelola seluruh isi argocd/
 argocd/
-  projects/                  AppProject: apps (workload aplikasi), platform (add-on cluster)
-  appsets/apps.yaml          ApplicationSet: 1 Application per apps/<app>/envs/<env>/
-  core/                      Add-on cluster (ingress-nginx, cert-manager, coredns)
-charts/app/                  Chart generik untuk semua aplikasi in-house
+  projects/                    AppProject: apps (workload) dan platform (add-on)
+  appsets/
+    apps.yaml                  ApplicationSet: 1 Application per apps/<app>/envs/<env>/
+    platform.yaml              ApplicationSet: 1 Application per platform/<addon>/envs/<env>/
+environments/<env>/values.yaml Nilai Helm tingkat environment (domain, ingress class, TLS)
+charts/app/                    Chart generik untuk semua aplikasi in-house
 apps/<app>/
-  values.yaml                Values yang sama di semua env
-  envs/<env>/config.yaml     Parameter Argo CD: chart, cluster/namespace tujuan, auto-sync
-  envs/<env>/values.yaml     Override per env (tag image, host, replika, config)
-secrets/<app>/<env>/         Secret terenkripsi SOPS, dirender KSOPS
-core/                        Manifest mentah untuk add-on (ClusterIssuer, ConfigMap CoreDNS)
-local-setup/                 Bootstrap lokal (k3d, values Argo CD, database). Tidak di-sync.
+  values.yaml                  Nilai yang sama di semua env
+  envs/<env>/config.yaml       Parameter Argo CD: chart, cluster tujuan, namespace, auto-sync
+  envs/<env>/values.yaml       Override per env: tag image, subdomain, replika, config
+platform/<addon>/
+  values.yaml                  Nilai add-on yang sama di semua env
+  envs/<env>/config.yaml       Parameter: Helm chart upstream ATAU sourcePath (manifest)
+  envs/<env>/values.yaml       Override per env (mis. NodePort vs LoadBalancer)
+  envs/<env>/manifests/        Manifest mentah (untuk add-on berbasis sourcePath)
+secrets/<app>/<env>/           Secret terenkripsi SOPS, dirender KSOPS
+local-setup/                   Bootstrap lokal (k3d, values Argo CD, database). Tidak di-sync.
 ```
 
-## Cara kerja
+## Dua lapisan, satu pola
 
-`root-apps` men-sync `argocd/`. ApplicationSet `apps` mencari setiap `apps/*/envs/*/config.yaml`
-dan membuat Application `<app>-<env>` dengan tiga sumber: chart, value files, dan `secrets/<app>/<env>`.
-Semua bagian satu app-env ada di satu Application, sehingga urutannya dijaga sync wave:
+Baik aplikasi maupun add-on cluster memakai pola yang sama: **folder per environment +
+values berlapis + ApplicationSet git-files**. Menambah app, add-on, atau environment =
+menambah folder, bukan menulis Application baru.
+
+- **apps** (`argocd/appsets/apps.yaml`) menemukan tiap `apps/*/envs/*/config.yaml` dan
+  membuat Application `<app>-<env>` di project `apps`.
+- **platform** (`argocd/appsets/platform.yaml`) menemukan tiap `platform/*/envs/*/config.yaml`
+  dan membuat Application `<addon>-<env>` di project `platform`. Add-on bisa berupa Helm chart
+  upstream (`chart:`) atau manifest mentah milik kita (`sourcePath:`). Add-on hanya hadir di
+  sebuah env jika folder `envs/<env>/`-nya ada (mis. `coredns-hostalias` hanya di dev,
+  `external-dns` nanti hanya di cloud).
+
+### Values berlapis (aplikasi)
+
+Nilai digabung dari bawah ke atas; lapis berikutnya menimpa:
+
+| Lapis | File | Isi |
+|-------|------|-----|
+| Chart default | `charts/app/values.yaml` | Default aman: non-root UID 10001, read-only FS, rolling update tanpa downtime, PDB, sebaran pod |
+| Environment | `environments/<env>/values.yaml` | `global.domain`, `global.ingressClassName`, `global.tls` dipakai semua app di env itu |
+| Aplikasi | `apps/<app>/values.yaml` | Arsitektur app: workloads, jobs, image repo |
+| App per-env | `apps/<app>/envs/<env>/values.yaml` | Tag image, `ingress.subdomain`, replika, config |
+
+Contoh: workload cukup menulis `ingress.subdomain: auth`. Host-nya disusun chart menjadi
+`auth.<global.domain>` dan, kalau `global.tls.enabled`, otomatis dapat blok TLS + anotasi
+`cert-manager.io/cluster-issuer`. Jadi di dev → `auth.dev...local` tanpa TLS, di cloud →
+`auth.example.com` dengan TLS, dari deklarasi app yang sama.
+
+## Urutan sync (sync wave)
+
+Dalam satu Application (chart + secret):
 
 | Wave | Resource |
 |------|----------|
+| -10 | AppProject (di level root-apps) |
 | -3 | Secret (KSOPS), ConfigMap, ServiceAccount |
-| -2, -1 | Job hook, mis. `migrate` lalu `seed` (berjalan di setiap sync, harus idempotent) |
+| -2, -1 | Job hook (mis. `migrate` lalu `seed`) — idempotent |
 | 0 | Deployment, Service, Ingress/HTTPRoute, HPA, PDB, NetworkPolicy |
 
 Namespace aplikasi dibuat otomatis dengan Pod Security Standard `restricted`.
 
-## Chart generik `charts/app`
+## Menambah environment baru (mis. production)
 
-Satu release bisa berisi kombinasi bebas dari:
+1. `environments/<env>/values.yaml` — set `global.domain`, `global.ingressClassName`,
+   dan `global.tls` (aktifkan TLS + `clusterIssuer` ACME untuk cloud).
+2. `apps/<app>/envs/<env>/{config.yaml,values.yaml}` — `destination.server` ke cluster env itu,
+   `image.tag` (atau `image.digest`) yang dipin, `sync.automated: false` untuk promosi manual.
+3. `platform/<addon>/envs/<env>/{config.yaml,values.yaml}` — mis. `ingress-nginx` dengan
+   `service.type: LoadBalancer`; `cert-manager-issuer` dengan ClusterIssuer ACME; tanpa
+   `coredns-hostalias` (itu khusus lokal).
+4. `make secret-generate APP=<app> ENV=<env> ENV_FILE=<file>`.
+5. Daftarkan cluster tujuan ke Argo CD (`argocd cluster add <context>`), lalu commit & push.
 
-- `workloads`: Deployment (server HTTP/gRPC, consumer antrean, dll). Kalau ada `ports`, otomatis dapat Service,
-  dan bisa ditambah Ingress atau HTTPRoute (Gateway API).
-- `jobs`: Job sebagai hook Argo CD (migrasi, seed).
-- `cronJobs`: Job terjadwal.
-
-Default bawaan: non-root UID 10001, root filesystem read-only, rolling update tanpa downtime
-(`maxUnavailable: 0`), sebaran pod antar zona dan node, PDB otomatis kalau pod > 1,
-NetworkPolicy ingress per workload (opsional). Semua opsi didokumentasikan di `charts/app/values.yaml`.
-
-Aplikasi yang butuh resource di luar chart ini cukup menunjuk chart lain lewat `chart.path` di `config.yaml`,
-lalu tambahkan kind-nya ke `argocd/projects/apps.yaml`.
-
-## Menambah environment atau aplikasi
-
-1. Buat `apps/<app>/envs/<env>/config.yaml` dan `values.yaml` (contoh: `apps/authorizer-service/envs/dev/`).
-   Namespace tujuan mengikuti pola `<app>-<env>`.
-2. Buat secret: `make secret-generate APP=<app> ENV=<env> ENV_FILE=<file .env>`.
-   Aplikasi tanpa secret: set `secrets.enabled: false` di `config.yaml`.
-3. Env baru selain `dev`: tambahkan pola namespace-nya (mis. `'*-prod'`) di `argocd/projects/apps.yaml`.
-4. Commit dan push. ApplicationSet membuat Application-nya.
+Project `apps` dan `platform` sudah mengizinkan cluster mana pun (`server: '*'`) dengan
+pembatasan pada pola namespace (`*-dev`/`*-staging`/`*-prod`) dan jenis resource, jadi
+menambah env tidak perlu mengubah project.
 
 ## authorizer-service
 
@@ -65,24 +93,20 @@ Satu image, peran dipilih lewat env `INTERFACE`:
 
 | Komponen | Isi |
 |----------|-----|
-| `public` | `HTTP_PUBLIC` di port 8181, probe `/health` dan `/ready`, HPA, Ingress |
+| `public` | `HTTP_PUBLIC` port 8181, probe `/health` & `/ready`, HPA, Ingress |
 | `event` | `EVENT`, consumer RabbitMQ (email), tanpa port |
 | `private` | `HTTP_PRIVATE`, nonaktif sampai handler-nya diimplementasikan di aplikasi |
 | Job `migrate` | golang-migrate dari `/app/migrations` di dalam image |
-| Job `seed` | `/app/seed`, membuat admin pertama |
+| Job `seed` | `/app/seed`, membuat admin pertama (idempotent) |
 
-Daftar key secret yang dibutuhkan ada di `secrets/authorizer-service/dev/.env.example`.
+Daftar key secret ada di `secrets/authorizer-service/dev/.env.example`.
 
-## Menuju production
+## Catatan production
 
-- `config.yaml`: `sync.automated: false` (sync manual setelah review), dan `chart.targetRevision`
-  ke git tag chart supaya perubahan chart dipromosikan per env.
-- `values.yaml` env: `config.ENVIRONMENT: production` dan `config.CORS` diisi origin yang valid,
-  replika/HPA sesuai beban, resource dari hasil pengukuran, `image.digest` untuk pin image.
-- Ingress dengan TLS (`tls` + anotasi `cert-manager.io/cluster-issuer` ke issuer ACME), atau `route` (Gateway API).
-- Database dan broker managed; ganti `host.k3d.internal` di secret.
-- Daftarkan cluster tujuan di Argo CD dan isi `destination.server`.
-- `.sops.yaml`: tambah recipient age kedua (backup/tim), atau pindah ke External Secrets + secret manager cloud.
+- Pin `chart.targetRevision` ke git tag agar perubahan chart dipromosikan per env.
+- `sync.automated: false` untuk prod (sync manual setelah review).
+- `image.digest` untuk mengunci image; `config.ENVIRONMENT: production` + `config.CORS` valid.
+- `.sops.yaml`: tambahkan recipient age kedua (backup/tim) atau pindah ke External Secrets + secret manager cloud.
 
 ## Bootstrap
 

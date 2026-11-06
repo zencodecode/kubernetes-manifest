@@ -16,9 +16,11 @@ spec:
   sourceRepos:
     - https://github.com/zencodecode/kubernetes-manifest.git
   destinations:
-    # Add a pattern per environment, e.g. '*-prod', when that env is introduced.
-    - server: '*'
-      namespace: '*-dev'
+    # One entry per environment namespace pattern. Any registered cluster ('*')
+    # is allowed; isolation comes from the namespace pattern and the kind lists.
+    - { server: '*', namespace: '*-dev' }
+    - { server: '*', namespace: '*-staging' }
+    - { server: '*', namespace: '*-prod' }
   # CreateNamespace=true in the generated Applications creates the namespace.
   clusterResourceWhitelist:
     - group: ''

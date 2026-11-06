@@ -1,0 +1,6 @@
+# cert-manager / dev. Small footprint for local k3d.
+# In cloud, raise resources and run the controller/webhook/cainjector with 2
+# replicas each for availability.
+resources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { memory: 128Mi }

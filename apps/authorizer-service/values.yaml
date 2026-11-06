@@ -11,7 +11,7 @@
 
 image:
   repository: docker.io/mafzaidi93/authorizer-service
-  tag: 0.0.0-dev.757bf63   # pinned per environment
+  tag: ""   # pinned per environment in envs/<env>/values.yaml
 
 # Runtime secrets (Postgres, Redis, RabbitMQ, SMTP, JWT, OAuth, SEED_*). Created
 # from secrets/authorizer-service/<env>/ by KSOPS in the same Argo CD Application.

@@ -1,0 +1,85 @@
+# One Argo CD Application per cluster add-on environment, discovered from
+#   platform/<addon>/envs/<env>/config.yaml
+# Generated Application: <addon>-<env>, project "platform". Two kinds of add-on:
+#
+#   Helm chart (upstream)      config.yaml has `chart: {repoURL, name, targetRevision}`
+#                              rendered with platform/<addon>/values.yaml +
+#                              platform/<addon>/envs/<env>/values.yaml
+#   Plain manifests (ours)     config.yaml has `sourcePath: <dir>` (a folder of YAML)
+#
+# An add-on exists in an environment only if it has an envs/<env>/ folder, so
+# local-only add-ons (coredns-hostalias) and cloud-only ones (external-dns) are
+# simply present or absent per environment.
+#
+# config.yaml keys (never use a top-level `path` key, the generator reserves it):
+#   chart.{repoURL,name,targetRevision}   for Helm add-ons
+#   sourcePath                            for plain-manifest add-ons
+#   destination.{server,namespace}        required
+#   sync.automated                        optional, default true
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+        revision: main
+        files:
+          - path: platform/*/envs/*/config.yaml
+  template:
+    metadata:
+      name: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      labels:
+        app.kubernetes.io/part-of: platform
+        environment: '{{ .path.basename }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      destination:
+        server: '{{ .destination.server }}'
+        namespace: '{{ .destination.namespace }}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          # cert-manager / ingress-nginx ship large CRDs; server-side apply avoids
+          # the client-side "last-applied" annotation size limit.
+          - ServerSideApply=true
+        retry:
+          # The ClusterIssuer waits for cert-manager's CRDs; retry until they exist.
+          limit: 10
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 5m
+  templatePatch: |
+    spec:
+      {{- if hasKey . "chart" }}
+      sources:
+        - repoURL: {{ .chart.repoURL }}
+          chart: {{ .chart.name }}
+          targetRevision: {{ .chart.targetRevision }}
+          helm:
+            releaseName: {{ index .path.segments 1 }}
+            valueFiles:
+              - $values/platform/{{ index .path.segments 1 }}/values.yaml
+              - $values/platform/{{ index .path.segments 1 }}/envs/{{ .path.basename }}/values.yaml
+        - repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+          targetRevision: main
+          ref: values
+      {{- else }}
+      source:
+        repoURL: https://github.com/zencodecode/kubernetes-manifest.git
+        targetRevision: main
+        path: {{ .sourcePath }}
+      {{- end }}
+      {{- if dig "sync" "automated" true . }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+      {{- end }}

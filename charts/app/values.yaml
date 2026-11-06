@@ -14,6 +14,21 @@
 # Resource name prefix and app.kubernetes.io/name. Defaults to the release name.
 nameOverride: ""
 
+# Environment-wide settings, normally supplied by environments/<env>/values.yaml
+# (injected by the apps ApplicationSet) so the same chart renders correctly in any
+# environment:
+#   - a workload with `ingress.subdomain: auth` is exposed at "auth.<global.domain>"
+#   - when global.tls.enabled, ingresses get a TLS block and, if set, the annotation
+#     cert-manager.io/cluster-issuer: <global.tls.clusterIssuer>
+#   - global.ingressClassName is the default ingress class for all workloads
+# Workloads may still set ingress.hosts / ingress.className / ingress.tls explicitly.
+global:
+  domain: ""
+  ingressClassName: ""
+  tls:
+    enabled: false
+    clusterIssuer: ""
+
 image:
   repository: ""        # required
   tag: ""               # required unless digest is set

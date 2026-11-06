@@ -12,10 +12,13 @@
 #   chart.repoURL         optional, default this repo
 #   chart.targetRevision  optional, default main (pin a git tag in prod to
 #                         promote chart changes env by env)
-#   destination.server    required
+#   destination.server    required (the cluster for this env)
 #   destination.namespace required, <app>-<env>
 #   secrets.enabled       optional, default true
 #   sync.automated        optional, default false (manual sync)
+#
+# Every env referenced here must have environments/<env>/values.yaml (env-wide
+# Helm values such as global.domain / global.ingressClassName / global.tls).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -69,6 +72,8 @@ spec:
           helm:
             releaseName: {{ index .path.segments 1 }}
             valueFiles:
+              # Lowest priority first: env-wide (domain/ingress/TLS) -> app base -> app/env.
+              - $values/environments/{{ .path.basename }}/values.yaml
               - $values/apps/{{ index .path.segments 1 }}/values.yaml
               - $values/{{ .path.path }}/values.yaml
         - repoURL: https://github.com/zencodecode/kubernetes-manifest.git

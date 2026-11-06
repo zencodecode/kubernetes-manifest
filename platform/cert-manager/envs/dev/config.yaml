@@ -1,0 +1,13 @@
+# Platform add-on parameters for cert-manager in dev (see argocd/appsets/platform.yaml).
+# Generated Application: cert-manager-dev, project "platform".
+chart:
+  repoURL: https://charts.jetstack.io
+  name: cert-manager
+  targetRevision: v1.16.2
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: cert-manager
+
+sync:
+  automated: true

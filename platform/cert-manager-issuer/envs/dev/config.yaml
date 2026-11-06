@@ -1,0 +1,12 @@
+# Platform add-on parameters for the ClusterIssuer in dev.
+# Path-based (plain manifests), not a Helm chart: `sourcePath` points at the
+# manifests folder. Generated Application: cert-manager-issuer-dev.
+# Syncs after cert-manager installs its CRDs (Argo CD retries until the CRD exists).
+sourcePath: platform/cert-manager-issuer/envs/dev/manifests
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: cert-manager
+
+sync:
+  automated: true

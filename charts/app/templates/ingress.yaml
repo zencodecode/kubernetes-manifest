@@ -2,7 +2,36 @@
 {{- $ing := $w.ingress | default dict }}
 {{- if and (include "app.isEnabled" $w) $w.ports $ing.enabled }}
 {{- $ctx := dict "root" $ "component" $name }}
+{{- $g := $.Values.global | default dict }}
+{{- $gtls := $g.tls | default dict }}
 {{- $defaultPort := (first $w.ports).name }}
+{{- $defaultPaths := list (dict "path" "/" "pathType" "Prefix") }}
+{{- /* Resolve host objects: explicit hosts[] win, else compose subdomain + global.domain. */}}
+{{- $hostObjs := list }}
+{{- if $ing.hosts }}
+{{-   range $ing.hosts }}
+{{-     $hostObjs = append $hostObjs (dict "host" .host "paths" (.paths | default $defaultPaths)) }}
+{{-   end }}
+{{- else if hasKey $ing "subdomain" }}
+{{-   $domain := required (printf "workloads.%s.ingress.subdomain needs global.domain to be set" $name) $g.domain }}
+{{-   $host := (empty $ing.subdomain) | ternary $domain (printf "%s.%s" ($ing.subdomain | toString) $domain) }}
+{{-   $hostObjs = append $hostObjs (dict "host" $host "paths" ($ing.paths | default $defaultPaths)) }}
+{{- else }}
+{{-   fail (printf "workloads.%s.ingress: set either hosts[] or subdomain (with global.domain)" $name) }}
+{{- end }}
+{{- /* Hostnames for the TLS block. */}}
+{{- $hostNames := list }}
+{{- range $hostObjs }}{{ $hostNames = append $hostNames .host }}{{ end }}
+{{- /* TLS: explicit ingress.tls wins, else derive it when global.tls.enabled. */}}
+{{- $tls := $ing.tls }}
+{{- if and (not $tls) $gtls.enabled }}
+{{-   $tls = list (dict "secretName" (printf "%s-tls" (include "app.componentName" $ctx)) "hosts" $hostNames) }}
+{{- end }}
+{{- /* Add the cert-manager issuer annotation only when we derived the TLS block. */}}
+{{- $annotations := $ing.annotations | default dict }}
+{{- if and $gtls.enabled $gtls.clusterIssuer (not $ing.tls) }}
+{{-   $annotations = mergeOverwrite (dict "cert-manager.io/cluster-issuer" $gtls.clusterIssuer) $annotations }}
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -10,24 +39,24 @@ metadata:
   name: {{ include "app.componentName" $ctx }}
   labels:
     {{- include "app.labels" $ctx | nindent 4 }}
-  {{- with $ing.annotations }}
+  {{- with $annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- with $ing.className }}
+  {{- with ($ing.className | default $g.ingressClassName) }}
   ingressClassName: {{ . }}
   {{- end }}
-  {{- with $ing.tls }}
+  {{- with $tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   rules:
-    {{- range (required (printf "workloads.%s.ingress.hosts is required" $name) $ing.hosts) }}
+    {{- range $hostObjs }}
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range (.paths | default (list (dict "path" "/"))) }}
+          {{- range .paths }}
           - path: {{ .path | default "/" }}
             pathType: {{ .pathType | default "Prefix" }}
             backend:

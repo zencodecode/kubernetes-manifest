@@ -1,4 +1,6 @@
-# authorizer-service / dev overrides (merged on top of ../../values.yaml).
+# authorizer-service / dev overrides.
+# Merged on top of (lowest first): environments/dev/values.yaml -> ../../values.yaml -> this file.
+# Env-wide settings (domain, ingress class, TLS) come from environments/dev/values.yaml.
 
 image:
   # Must be built from the current Dockerfile (numeric UID 10001, bundled
@@ -17,12 +19,9 @@ workloads:
       maxReplicas: 3
     ingress:
       enabled: true
-      className: nginx
-      hosts:
-        - host: dev-public-service.authorizer.local
-          paths:
-            - path: /
-              pathType: Prefix
+      # Host = <subdomain>.<global.domain> = dev-public-service.authorizer.local
+      # (global.domain + ingress class come from environments/dev/values.yaml).
+      subdomain: dev-public-service
 
   event:
     # One consumer is enough locally; RabbitMQ buffers messages during restarts.

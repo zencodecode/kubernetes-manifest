@@ -16,13 +16,11 @@ spec:
     - https://kubernetes.github.io/ingress-nginx
     - https://charts.jetstack.io
   destinations:
-    - server: https://kubernetes.default.svc
-      namespace: ingress-nginx
-    - server: https://kubernetes.default.svc
-      namespace: cert-manager
+    # Any registered cluster ('*'); isolation comes from the fixed add-on namespaces.
+    - { server: '*', namespace: ingress-nginx }
+    - { server: '*', namespace: cert-manager }
     # cert-manager keeps its leader-election Role in kube-system; coredns-custom lives there.
-    - server: https://kubernetes.default.svc
-      namespace: kube-system
+    - { server: '*', namespace: kube-system }
   clusterResourceWhitelist:
     - group: '*'
       kind: '*'

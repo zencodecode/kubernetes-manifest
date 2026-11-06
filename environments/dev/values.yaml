@@ -1,0 +1,18 @@
+# Environment-wide Helm values for the "dev" environment.
+# Injected by argocd/appsets/apps.yaml as the lowest-priority value file for
+# every app in this env, so domain / ingress class / TLS are declared once here
+# instead of being repeated in each app.
+#
+# To add a new environment, copy this file to environments/<env>/values.yaml and
+# adjust the values (e.g. a real domain and an ACME issuer for production).
+
+global:
+  # Apps expose themselves as "<subdomain>.<domain>"; see each app's
+  # workloads.<w>.ingress.subdomain.
+  domain: authorizer.local
+  ingressClassName: nginx
+  tls:
+    # Local k3d serves plain HTTP. In cloud set enabled: true and point
+    # clusterIssuer at an ACME ClusterIssuer (see platform/cert-manager-issuer).
+    enabled: false
+    clusterIssuer: ""

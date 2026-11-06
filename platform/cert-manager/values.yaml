@@ -1,0 +1,4 @@
+# Common cert-manager values for every environment.
+# Environment-specific values live in platform/cert-manager/envs/<env>/values.yaml.
+crds:
+  enabled: true

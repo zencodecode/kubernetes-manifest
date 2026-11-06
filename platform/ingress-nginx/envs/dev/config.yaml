@@ -1,0 +1,13 @@
+# Platform add-on parameters for ingress-nginx in dev (see argocd/appsets/platform.yaml).
+# Generated Application: ingress-nginx-dev, project "platform".
+chart:
+  repoURL: https://kubernetes.github.io/ingress-nginx
+  name: ingress-nginx
+  targetRevision: 4.11.3
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: ingress-nginx
+
+sync:
+  automated: true

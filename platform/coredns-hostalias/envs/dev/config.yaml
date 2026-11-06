@@ -1,0 +1,12 @@
+# LOCAL ONLY. Lets in-cluster pods resolve host.k3d.internal to the Docker host,
+# where Postgres/Redis/RabbitMQ run via docker-compose. Cloud environments use
+# real DNS for managed databases, so this add-on simply has no envs/<cloud> folder
+# and is never generated there.
+sourcePath: platform/coredns-hostalias/envs/dev/manifests
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: kube-system
+
+sync:
+  automated: true

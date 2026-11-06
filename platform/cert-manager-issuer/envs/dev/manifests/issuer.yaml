@@ -1,0 +1,18 @@
+# dev issuer: self-signed (no public CA needed for local HTTP/HTTPS testing).
+# In cloud, replace with an ACME ClusterIssuer, e.g.:
+#   apiVersion: cert-manager.io/v1
+#   kind: ClusterIssuer
+#   metadata: { name: letsencrypt-prod }
+#   spec:
+#     acme:
+#       server: https://acme-v02.api.letsencrypt.org/directory
+#       email: ops@example.com
+#       privateKeySecretRef: { name: letsencrypt-prod }
+#       solvers:
+#         - http01: { ingress: { ingressClassName: nginx } }
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}

@@ -1,0 +1,3 @@
+# Common ingress-nginx values for every environment.
+# Environment-specific values (Service type, node ports, resources, replicas)
+# live in platform/ingress-nginx/envs/<env>/values.yaml.
