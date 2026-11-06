@@ -15,12 +15,15 @@ spec:
     - https://github.com/zencodecode/kubernetes-manifest.git
     - https://kubernetes.github.io/ingress-nginx
     - https://charts.jetstack.io
+    - https://argoproj.github.io/argo-helm
   destinations:
     # Any registered cluster ('*'); isolation comes from the fixed add-on namespaces.
     - { server: '*', namespace: ingress-nginx }
     - { server: '*', namespace: cert-manager }
     # cert-manager keeps its leader-election Role in kube-system; coredns-custom lives there.
     - { server: '*', namespace: kube-system }
+    # argocd-image-updater runs alongside Argo CD in the argocd namespace.
+    - { server: '*', namespace: argocd }
   clusterResourceWhitelist:
     - group: '*'
       kind: '*'

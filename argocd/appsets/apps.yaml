@@ -17,6 +17,15 @@
 #   secrets.enabled       optional, default true
 #   sync.automated        optional, default false (manual sync)
 #
+# Image Updater (git write-back) — add these keys to enable automatic image
+# tag updates committed back to this repository:
+#   imageUpdater.image       required, e.g. mafzaidi93/authorizer-service
+#   imageUpdater.strategy    optional, default "latest" (semver | latest | digest)
+#   imageUpdater.constraint  optional, version constraint (e.g. "~0.0" for semver)
+# When imageUpdater is present the ApplicationSet adds the annotations that
+# argocd-image-updater reads. The updater commits the new tag into
+# apps/<app>/envs/<env>/values.yaml (via .argocd-source-<appName>.yaml override).
+#
 # Every env referenced here must have environments/<env>/values.yaml (env-wide
 # Helm values such as global.domain / global.ingressClassName / global.tls).
 apiVersion: argoproj.io/v1alpha1
@@ -64,6 +73,20 @@ spec:
             factor: 2
             maxDuration: 3m
   templatePatch: |
+    metadata:
+      {{- if hasKey . "imageUpdater" }}
+      annotations:
+        argocd-image-updater.argoproj.io/image-list: app={{ .imageUpdater.image }}
+        argocd-image-updater.argoproj.io/app.update-strategy: {{ dig "strategy" "latest" .imageUpdater }}
+        {{- with dig "constraint" "" .imageUpdater }}
+        argocd-image-updater.argoproj.io/app.version-constraint: {{ . }}
+        {{- end }}
+        argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
+        argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
+        argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+        argocd-image-updater.argoproj.io/write-back-target: "helmvalues:{{ .path.path }}/values.yaml"
+        argocd-image-updater.argoproj.io/git-branch: main
+      {{- end }}
     spec:
       sources:
         - repoURL: {{ dig "chart" "repoURL" "https://github.com/zencodecode/kubernetes-manifest.git" . }}

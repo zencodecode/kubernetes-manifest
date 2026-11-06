@@ -1,0 +1,3 @@
+# argocd-image-updater / dev overrides.
+# No additional overrides needed for the local dev environment.
+# The base values (../values.yaml) are sufficient.

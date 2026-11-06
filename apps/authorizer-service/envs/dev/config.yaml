@@ -14,3 +14,10 @@ sync:
   # dev: auto-sync with prune + self-heal. For production set false and
   # promote with a manual sync after review.
   automated: true
+
+# Automatic image tag updates via argocd-image-updater (git write-back).
+# When a new tag matching the strategy is pushed to Docker Hub, the image
+# updater commits the updated tag to this env's values.yaml and pushes to main.
+imageUpdater:
+  image: docker.io/mafzaidi93/authorizer-service
+  strategy: latest

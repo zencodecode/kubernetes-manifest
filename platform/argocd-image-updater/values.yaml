@@ -1,0 +1,29 @@
+# argocd-image-updater: values shared across all environments.
+# Per-env overrides live in envs/<env>/values.yaml.
+
+# Check Docker Hub for new image tags every 5 minutes.
+extraArgs:
+  - --interval=5m
+
+# Git commit author for write-back commits.
+config:
+  gitCommitUser: argocd-image-updater[bot]
+  gitCommitMail: image-updater@argocd.local
+  gitCommitTemplate: |
+    build: update {{ .AppName }} image tag to {{ .NewTag }}
+
+    {{ range .AppChanges -}}
+    - {{ .Image }}: {{ .OldTag }} → {{ .NewTag }}
+    {{ end -}}
+
+  # Explicit registry configuration. Docker Hub is the default; add private
+  # registries here (ACR, ECR, GCR, GHCR, etc.) with their credentials.
+  registries:
+    - name: Docker Hub
+      api_url: https://registry-1.docker.io
+      prefix: docker.io
+      default: true
+
+resources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { memory: 128Mi }

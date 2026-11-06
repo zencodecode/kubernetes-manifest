@@ -1,0 +1,18 @@
+# Platform add-on parameters for argocd-image-updater in dev.
+# Generated Application: argocd-image-updater-dev, project "platform".
+#
+# The Image Updater watches Application annotations and, when a newer image tag
+# is found on Docker Hub, commits the updated tag back to this Git repository
+# (git write-back method) and pushes to main. Argo CD then picks up the commit
+# and syncs the workload.
+chart:
+  repoURL: https://argoproj.github.io/argo-helm
+  name: argocd-image-updater
+  targetRevision: 1.4.0
+
+destination:
+  server: https://kubernetes.default.svc
+  namespace: argocd
+
+sync:
+  automated: true
