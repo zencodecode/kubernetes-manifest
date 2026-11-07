@@ -5,13 +5,12 @@
 image:
   # Must be built from the current Dockerfile (numeric UID 10001, bundled
   # migrate CLI + /app/migrations). Bump this after pushing a new image.
-  tag: 0.0.0-dev.757bf63
-
+  tag: 0.0.0-dev.5e72b33
+  repository: docker.io/mafzaidi93/authorizer-service
 config:
   # Local cluster serves plain HTTP: no HTTPS redirect, any CORS origin.
   ENVIRONMENT: development
   CORS: "*"
-
 workloads:
   public:
     autoscaling:
@@ -22,7 +21,6 @@ workloads:
       # Host = <subdomain>.<global.domain> = dev-public-service.authorizer.local
       # (global.domain + ingress class come from environments/dev/values.yaml).
       subdomain: dev-public-service
-
   event:
     # One consumer is enough locally; RabbitMQ buffers messages during restarts.
     replicas: 1
