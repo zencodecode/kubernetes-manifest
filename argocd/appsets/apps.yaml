@@ -77,14 +77,14 @@ spec:
       {{- if hasKey . "imageUpdater" }}
       annotations:
         argocd-image-updater.argoproj.io/image-list: app={{ .imageUpdater.image }}
-        argocd-image-updater.argoproj.io/app.update-strategy: {{ dig "strategy" "latest" .imageUpdater }}
+        argocd-image-updater.argoproj.io/app.update-strategy: {{ dig "strategy" "newest-build" .imageUpdater }}
         {{- with dig "constraint" "" .imageUpdater }}
         argocd-image-updater.argoproj.io/app.version-constraint: {{ . }}
         {{- end }}
         argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
         argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
         argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
-        argocd-image-updater.argoproj.io/write-back-target: "helmvalues:{{ .path.path }}/values.yaml"
+        argocd-image-updater.argoproj.io/write-back-target: "helmvalues:../../{{ .path.path }}/values.yaml"
         argocd-image-updater.argoproj.io/git-branch: main
       {{- end }}
     spec:

@@ -27,3 +27,16 @@ config:
 resources:
   requests: { cpu: 25m, memory: 64Mi }
   limits: { memory: 128Mi }
+
+# Declare the ImageUpdater custom resource so argocd-image-updater controller
+# watches and reconciles Application annotations across the cluster.
+extraObjects:
+  - apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+    kind: ImageUpdater
+    metadata:
+      name: default
+      namespace: argocd
+    spec:
+      applicationRefs:
+        - namePattern: "*"
+          useAnnotations: true

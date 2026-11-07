@@ -20,4 +20,4 @@ sync:
 # updater commits the updated tag to this env's values.yaml and pushes to main.
 imageUpdater:
   image: docker.io/mafzaidi93/authorizer-service
-  strategy: latest
+  strategy: newest-build
