@@ -5,7 +5,7 @@
 image:
   # Must be built from the current Dockerfile (numeric UID 10001, bundled
   # migrate CLI + /app/migrations). Bump this after pushing a new image.
-  tag: 0.0.0-dev.5e72b33
+  tag: 0.0.0-dev.754a967
   repository: docker.io/mafzaidi93/authorizer-service
 config:
   # Local cluster serves plain HTTP: no HTTPS redirect, any CORS origin.
